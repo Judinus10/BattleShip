@@ -66,150 +66,132 @@ OPERATIONS
         THEN
             selected_column := col_val
         END;
-        
-report <-- deployFleet(player, row, col) =
-  PRE
-    player : PLAYER &
-    row : ROW &
-    col : COLUMN &
-    selected_row = row &
-    selected_column = col &
-    row |-> col /: player1_ships & 
-    row |-> col /: player2_ships &
-    (game_status = deploy_required or game_status = player1_deploying or game_status = player2_deploying) &
-    report : REPORT
-  THEN
-    IF (player = player1) THEN
-      IF (card(player1_ships) < 3) THEN
-        player1_ships := player1_ships \/ {row |-> col} ||
-        report := success ||
-        IF (card(player1_ships) = 2) THEN //Warning
-          game_status := player2_deploying
-        END
-      ELSE
-        report := player1AlreadyDeployed
-      END
-    ELSE
-      IF (game_status = player2_deploying) THEN
-        player2_ships := player2_ships \/ {row |-> col} ||
-        report := success ||
-        IF (card(player2_ships) = 2) THEN
-          game_status := ongoing ||
-          current_player := player1
-          
-        END
-      ELSE
-        report := player2NotReady
-      END
-    END
-  END;
 
-
-report <-- playerShoots(row, col) =
-  PRE
-    row : ROW &
-    col : COLUMN &
-    game_status = ongoing &
-    report : REPORT &
-    selected_row = row &
-    selected_column = col
-  THEN
-    IF (player1_ships = {}) THEN
-        game_status := player2_wins || report := player2Wins
-    ELSIF (player2_ships = {}) THEN
-        game_status := player1_wins ||report := player1Wins
-    ELSE
-        IF (current_player = player1) THEN
-      player1_shots := player1_shots + 1 ||
-      IF (row |-> col) : player2_ships THEN
-        player2_ships := player2_ships - {row |-> col} ||
+    report <-- deployFleet(player, row, col) =
+      PRE
+        player : PLAYER &                 
+        row : ROW &                       
+        col : COLUMN &                    
+        selected_row = row &              
+        selected_column = col &           
+        row |-> col /: player1_ships &    
+        row |-> col /: player2_ships &    
+        report : REPORT                   
+      THEN
+        IF (player = player1) THEN
+          IF (game_status = deploy_required or game_status = player1_deploying) THEN
+            IF (card(player1_ships) < 3) THEN
+              player1_ships := player1_ships \/ {row |-> col} || report := success;
+              IF (card(player1_ships) = 3) THEN
+                game_status := player2_deploying || report := success
+              END
+            ELSE
+              report := player1AlreadyDeployed
+            END
+          ELSE
+            report := player2NotReady
+          END
+        ELSE 
+          IF (game_status = player2_deploying) THEN
+            IF (card(player2_ships) < 3) THEN
+              player2_ships := player2_ships \/ {row |-> col} || report := success;
+              IF (card(player2_ships) = 3) THEN
+                game_status := ongoing || current_player := player1 || report := success
+              END
+            ELSE
+              report := player2NotReady
+            END
+          ELSE
+            report := player2NotReady
+          END
+        END
+      END;
+    
+    
+    report <-- playerShoots(row, col) =
+      PRE
+        row : ROW &
+        col : COLUMN &
+        game_status = ongoing &
+        report : REPORT &
+        selected_row = row &
+        selected_column = col
+      THEN
 //        IF (player1_ships = {}) THEN
-//          game_status := player2_wins ||
-//          report := player2Wins
+//            game_status := player2_wins || report := player2Wins
 //        ELSE
-          report := hit
-//        END
-      ELSE
-        report := miss
-      END ||
-      current_player := player2
-    ELSE
-      player2_shots := player2_shots + 1 ||
-      IF (row |-> col) : player1_ships THEN
-        player1_ships := player1_ships - {row |-> col} ||
-        IF (player1_ships = {}) THEN
-          game_status := player2_wins ||
-          report := player2Wins
-        ELSE
-          report := hit
+            IF (current_player = player1) THEN
+                player1_shots := player1_shots + 1 ||
+                IF (row |-> col) : player2_ships THEN
+                    player2_ships := player2_ships - {row |-> col} ||
+                    IF (player2_ships = {}) THEN
+                        game_status := player1_wins || report := player1Wins
+                    ELSE
+                        report := hit ||
+                        current_player := player2
+                    END
+                ELSE
+                    report := miss || current_player := player2
+                END 
+            ELSE
+                IF (player2_ships = {}) THEN
+                    game_status := player1_wins ||report := player1Wins
+                ELSE
+                    player2_shots := player2_shots + 1 ||
+                    IF (row |-> col) : player1_ships THEN
+                        player1_ships := player1_ships - {row |-> col} ||
+                        report := hit
+                    ELSE
+                        report := miss
+                    END ||
+                      current_player := player1
+                END
+            END
+//       END
+    END;
+
+
+
+    shipsquares <-- shipLocations(player) =
+      PRE
+        player : PLAYER
+      THEN
+        CASE player OF EITHER
+          player1 THEN shipsquares := player1_ships
+          OR
+          player2 THEN shipsquares := player2_ships
         END
-      ELSE
-        report := miss
-      END ||
-      current_player := player1
-    END
-    END
-    // Check if the game has ended (all ships hit for one player)
-//    IF (player1_ships = {}) THEN
-//      game_status := player2_wins ||
-//      report := player2Wins
-//    ELSE IF (player2_ships = {}) THEN
-//      game_status := player1_wins ||
-//      report := player1Wins
-//    END
-//  END
-  END;
+      END
+    END;
+
+    shipCount <-- shipsLeft(player) =
+      PRE
+        player : PLAYER
+      THEN
+        IF (player = player1) THEN
+          shipCount := card(player1_ships)
+        ELSE
+          shipCount := card(player2_ships)
+        END
+    END;
 
 
+    shotCount <-- shotsTaken(player) =
+      PRE
+        player : PLAYER
+      THEN
+        CASE player OF EITHER
+          player1 THEN shotCount := player1_shots 
+          OR
+          player2 THEN shotCount := player2_shots 
+        END
+      END
+    END;
 
-shipsquares <-- shipLocations(player) =
-  PRE
-    player : PLAYER
-  THEN
-    CASE player OF EITHER
-      player1 THEN shipsquares := player1_ships
-      OR
-      player2 THEN shipsquares := player2_ships
-    END
-  END
-  END;
-
-shipCounts <-- shipsLeft =
-  BEGIN
-    shipCounts := (SHIP_COUNT - card(player1_ships), SHIP_COUNT - card(player2_ships))
-  END;
-
-shotCount <-- shotsTaken(player) =
-  PRE
-    player : PLAYER
-  THEN
-    CASE player OF EITHER
-      player1 THEN shotCount := player1_shots || 
-          IF player1_shots = 3 THEN
-          game_status := player1_wins
-          END
-      OR
-      player2 THEN shotCount := player2_shots || 
-          IF player1_shots = 3 THEN
-          game_status := player2_wins
-          END
-    END
-  END
-  END;
-
-report <-- gameStatus =
-BEGIN
-    report := game_status
-//  PRE
-//    report : REPORT
-//  THEN
-//    CASE game_status OF EITHER
-//      player1_wins THEN report := player1Wins
-//      OR
-//      player2_wins THEN report := player2Wins
-//    END
-//  END
-  END
+    report <-- gameStatus =
+        BEGIN
+            report := game_status
+        END
 
 END
 
